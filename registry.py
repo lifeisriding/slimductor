@@ -40,12 +40,89 @@ def is_alive(pid: int) -> bool:
         return False
 
 
+def _win_process_snapshot() -> tuple:
+    """Return (pid_to_parent, pid_to_name) maps for all Windows processes."""
+    import ctypes
+    import ctypes.wintypes
+
+    class PROCESSENTRY32(ctypes.Structure):
+        _fields_ = [
+            ("dwSize",             ctypes.wintypes.DWORD),
+            ("cntUsage",           ctypes.wintypes.DWORD),
+            ("th32ProcessID",      ctypes.wintypes.DWORD),
+            ("th32DefaultHeapID",  ctypes.c_size_t),   # ULONG_PTR — pointer-sized
+            ("th32ModuleID",       ctypes.wintypes.DWORD),
+            ("cntThreads",         ctypes.wintypes.DWORD),
+            ("th32ParentProcessID",ctypes.wintypes.DWORD),
+            ("pcPriClassBase",     ctypes.c_long),
+            ("dwFlags",            ctypes.wintypes.DWORD),
+            ("szExeFile",          ctypes.c_char * 260),
+        ]
+
+    TH32CS_SNAPPROCESS = 0x00000002
+    snap = ctypes.windll.kernel32.CreateToolhelp32Snapshot(TH32CS_SNAPPROCESS, 0)
+    if snap == ctypes.wintypes.HANDLE(-1).value:
+        return {}, {}
+    pid_map, name_map = {}, {}
+    entry = PROCESSENTRY32()
+    entry.dwSize = ctypes.sizeof(PROCESSENTRY32)
+    try:
+        if ctypes.windll.kernel32.Process32First(snap, ctypes.byref(entry)):
+            while True:
+                pid_map[entry.th32ProcessID] = entry.th32ParentProcessID
+                name_map[entry.th32ProcessID] = entry.szExeFile.decode("utf-8", errors="replace").lower()
+                if not ctypes.windll.kernel32.Process32Next(snap, ctypes.byref(entry)):
+                    break
+    finally:
+        ctypes.windll.kernel32.CloseHandle(snap)
+    return pid_map, name_map
+
+
+# Process names that are Claude Code itself (the stable session process).
+_CLAUDE_EXES = {"claude.exe", "claude"}
+# Process names that are short-lived wrappers we want to skip past.
+_SKIP_EXES = {"py.exe", "python.exe", "python3", "python", "bash.exe", "bash", "sh.exe", "sh"}
+
+
+def get_tracking_pid() -> int:
+    """Return the long-lived parent PID to use for liveness checking.
+
+    On Unix: os.getppid() is the shell / Claude Code process — correct.
+    On Windows: `py script.py` spawns through py.exe and potentially several
+    bash.exe subshells before reaching claude.exe.  Walk up the process tree
+    until we find claude.exe (preferred) or the first non-skippable ancestor.
+    """
+    if sys.platform != "win32":
+        ppid = os.getppid()
+        return ppid if ppid > 1 else os.getpid()
+    try:
+        pid_map, name_map = _win_process_snapshot()
+        pid = os.getpid()
+        last_alive = pid
+        for _ in range(15):                     # safety cap
+            parent = pid_map.get(pid, 0)
+            if parent <= 1 or parent == pid:
+                break
+            pname = name_map.get(parent, "")
+            if pname in _CLAUDE_EXES:
+                return parent                   # found claude.exe — ideal
+            if is_alive(parent):
+                last_alive = parent
+                if pname not in _SKIP_EXES:
+                    break                       # first non-wrapper alive ancestor
+            pid = parent
+        return last_alive
+    except Exception:
+        pass
+    ppid = os.getppid()
+    return ppid if ppid > 1 else os.getpid()
+
+
 def session_file() -> Path:
     # Prefer CLAUDE_SESSION_ID (unique UUID per session).
-    # Fall back to parent PID — hooks run as subprocesses, so os.getppid()
-    # gives Claude Code's own PID, which is consistent across all hook calls
-    # for the same session. Never use os.getpid() — it changes per invocation.
-    sid = os.environ.get("CLAUDE_SESSION_ID") or f"pid-{os.getppid()}"
+    # Fall back to tracking PID — consistent across all hook calls for the
+    # same session. On Windows we skip the py.exe launcher layer.
+    sid = os.environ.get("CLAUDE_SESSION_ID") or f"pid-{get_tracking_pid()}"
     return ACTIVE_DIR / f"{sid}.json"
 
 
@@ -54,10 +131,11 @@ def register(role: str = "orchestrator") -> None:
     f = session_file()
     if f.exists():
         return  # Already registered — idempotent
-    # Store parent PID (Claude Code's PID) for liveness checking.
-    # Hook subprocesses die immediately after running — tracking their PID
-    # would make every session appear stale. The parent is Claude Code itself.
-    tracking_pid = os.getppid() if os.getppid() > 1 else os.getpid()
+    # Store the long-lived parent PID (Claude Code / shell) for liveness checking.
+    # Hook subprocesses die immediately — tracking their own PID would make
+    # every session appear stale.  get_tracking_pid() handles the Windows
+    # py.exe launcher layer automatically.
+    tracking_pid = get_tracking_pid()
     f.write_text(json.dumps({
         "pid": tracking_pid,
         "startedAt": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
