@@ -1,0 +1,31 @@
+# Handover — My Project — 2026-02-24
+
+## Completed This Session
+- [x] Added JWT auth middleware (app/auth.py, commit: abc1234)
+- [x] Updated user model to include refresh token (app/models.py, commit: def5678)
+- [x] Wrote tests for auth endpoints (tests/test_auth.py, commit: ghi9012)
+
+## Current State
+Auth is working end-to-end. Login, token refresh, and logout all pass tests.
+The dashboard route still uses the old session-based auth — that's the next task.
+
+## Next Tasks (ordered)
+1. Update dashboard route to use JWT middleware (app/routes/dashboard.py)
+2. Update frontend auth header injection (static/js/auth.js)
+3. Remove old session middleware from app/middleware.py (it's unused now)
+4. Run full test suite before merge
+
+## Key Decisions Made
+- Used RS256 (asymmetric) over HS256 — allows future service-to-service auth without sharing secrets
+- Refresh tokens stored in httpOnly cookie, access tokens in memory — not localStorage
+- Token expiry: access 15min, refresh 7 days
+
+## Open Questions / Blockers
+- Marc: should refresh token rotation be enabled? (each use issues a new refresh token, invalidates old)
+- The logout endpoint needs to decide: invalidate server-side (requires a denylist) or just clear the cookie?
+
+## Files Touched
+- app/auth.py — new JWT middleware, login/logout/refresh endpoints
+- app/models.py — added refresh_token and token_issued_at fields
+- app/routes/dashboard.py — partially updated (needs finish in next session)
+- tests/test_auth.py — new test file, 14 tests, all passing
