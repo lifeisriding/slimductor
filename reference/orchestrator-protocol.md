@@ -8,7 +8,7 @@ Each Claude Code session writes to `~/.claude/active/{SESSION_ID}.json`:
   "pid": 12345,
   "startedAt": "2026-02-24T10:00:00Z",
   "sessionId": "abc-123-def",
-  "cwd": "C:/Users/marcl/my-project",
+  "cwd": "C:/Users/you/my-project",
   "role": "orchestrator"
 }
 ```
