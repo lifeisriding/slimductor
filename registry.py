@@ -41,7 +41,11 @@ def is_alive(pid: int) -> bool:
 
 
 def session_file() -> Path:
-    sid = os.environ.get("CLAUDE_SESSION_ID", f"pid-{os.getpid()}")
+    # Prefer CLAUDE_SESSION_ID (unique UUID per session).
+    # Fall back to parent PID — hooks run as subprocesses, so os.getppid()
+    # gives Claude Code's own PID, which is consistent across all hook calls
+    # for the same session. Never use os.getpid() — it changes per invocation.
+    sid = os.environ.get("CLAUDE_SESSION_ID") or f"pid-{os.getppid()}"
     return ACTIVE_DIR / f"{sid}.json"
 
 
@@ -50,8 +54,12 @@ def register(role: str = "orchestrator") -> None:
     f = session_file()
     if f.exists():
         return  # Already registered — idempotent
+    # Store parent PID (Claude Code's PID) for liveness checking.
+    # Hook subprocesses die immediately after running — tracking their PID
+    # would make every session appear stale. The parent is Claude Code itself.
+    tracking_pid = os.getppid() if os.getppid() > 1 else os.getpid()
     f.write_text(json.dumps({
-        "pid": os.getpid(),
+        "pid": tracking_pid,
         "startedAt": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
         "sessionId": os.environ.get("CLAUDE_SESSION_ID", "unknown"),
         "cwd": os.getcwd(),
