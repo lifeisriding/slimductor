@@ -33,7 +33,7 @@ Slimductor solves this with three things:
 │   └── security.md          # tiered security checklist by project type
 ├── reference/
 │   └── orchestrator-protocol.md  # full spec: registry format, TRAFFIC.md, known bugs
-└── settings.json            # patched: adds SessionStart/Stop hooks + Agent Teams env var
+└── settings.json            # patched: adds SessionStart/SessionEnd hooks + Agent Teams env var
 ```
 
 Rules files in `~/.claude/rules/` are automatically loaded into every Claude Code session as context.
@@ -75,7 +75,7 @@ When Claude Code starts, a `SessionStart` hook fires `registry.py register`, wri
 ```
 to `~/.claude/active/{session-id}.json`.
 
-When Claude Code stops, a `Stop`/`SessionEnd` hook fires `registry.py deregister`, deleting the file.
+When Claude Code stops, a `SessionEnd` hook fires `registry.py deregister`, deleting the file.
 
 If Claude Code crashes and the hook doesn't fire, the next session reads the entry, checks whether the PID is still alive, and auto-cleans stale entries. No manual cleanup needed.
 

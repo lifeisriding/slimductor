@@ -28,7 +28,6 @@ FILES_TO_COPY = [
 
 HOOKS_TO_ADD = {
     "SessionStart": [{"hooks": [{"type": "command", "command": f"py {CLAUDE_DIR}/registry.py register"}]}],
-    "Stop":         [{"hooks": [{"type": "command", "command": f"py {CLAUDE_DIR}/registry.py deregister"}]}],
     "SessionEnd":   [{"hooks": [{"type": "command", "command": f"py {CLAUDE_DIR}/registry.py deregister"}]}],
 }
 
