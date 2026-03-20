@@ -1,0 +1,18 @@
+# Traffic Control — My Project
+
+## Active Sessions
+| Session | Role | Domain | Branch | Last Update |
+|---------|------|--------|--------|-------------|
+| S26 | orchestrator | auth module | feature/S26-auth | 2026-02-24 10:30 |
+| S27 | worker | dashboard UI | feature/S27-dash | 2026-02-24 10:45 |
+
+## Claimed Files
+| File | Claimed By | Since |
+|------|------------|-------|
+| app/auth.py | S26 | 10:30 |
+| app/dashboard.py | S27 | 10:45 |
+
+## Recent Handoffs
+| From | To | Branch | Status |
+|------|----|--------|--------|
+| S25 | S26 | feature/S25-api | ✓ merged 2026-02-23 |
